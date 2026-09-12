@@ -516,7 +516,11 @@ if st.session_state.result:
 
     if send_btn and user_input.strip():
         with st.spinner("Thinking…"):
-            answer = ask_question(r["rag_chain"], user_input.strip())
+            answer = ask_question(
+                r["rag_chain"],
+                user_input.strip(),
+                st.session_state.chat_history,
+            )
         st.session_state.chat_history.append({"role": "user",      "content": user_input.strip()})
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
         st.rerun()

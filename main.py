@@ -54,6 +54,7 @@ if __name__ == "__main__":
     # Phase 2 — Chat with your meeting via RAG
     print("\n💬 Chat with your meeting (type 'exit' to quit)\n")
     rag_chain = result["rag_chain"]
+    chat_history = []
     while True:
         question = input("You: ").strip()
         if question.lower() in ["exit", "quit", "q"]:
@@ -61,5 +62,9 @@ if __name__ == "__main__":
             break
         if not question:
             continue
-        answer = ask_question(rag_chain, question)
+        answer = ask_question(rag_chain, question, chat_history)
+        chat_history.extend([
+            {"role": "user", "content": question},
+            {"role": "assistant", "content": answer},
+        ])
         print(f"\n🤖 Assistant: {answer}\n")
