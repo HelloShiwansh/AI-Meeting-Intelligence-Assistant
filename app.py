@@ -1,13 +1,15 @@
 import streamlit as st
 import time
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.rag_engine import build_rag_chain, ask_question
-
-load_dotenv()
+from utils.exports import RESULT_SECTIONS, build_downloads, export_filename
 
 # ─── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -429,6 +431,8 @@ if run_btn:
 # ── Results ──────────────────────────────────────────────────────────────────────
 if st.session_state.result:
     r = st.session_state.result
+    downloads = build_downloads(r, st.session_state.chat_history)
+    filename = export_filename(r["title"])
 
     # Title banner
     st.markdown(f"""
@@ -438,6 +442,41 @@ if st.session_state.result:
             {r['title']}
         </div>
     </div>""", unsafe_allow_html=True)
+
+    with st.expander("Download results", expanded=True):
+        report_col, text_col, zip_col = st.columns(3)
+        for column, label, artifact, mime in [
+            (report_col, "Download report (.md)", "report.md", "text/markdown; charset=utf-8"),
+            (text_col, "Download report (.txt)", "report.txt", "text/plain; charset=utf-8"),
+            (zip_col, "Download everything (.zip)", "all_results.zip", "application/zip"),
+        ]:
+            with column:
+                st.download_button(
+                    label,
+                    data=downloads[artifact],
+                    file_name=f"{filename}_{artifact}",
+                    mime=mime,
+                    on_click="ignore",
+                    use_container_width=True,
+                )
+
+        section_labels = {key: label for key, label in RESULT_SECTIONS}
+        if st.session_state.chat_history:
+            section_labels["chat"] = "Meeting Chat"
+        selected_section = st.selectbox(
+            "Download an individual result",
+            options=list(section_labels),
+            format_func=section_labels.get,
+            key="download_section",
+        )
+        st.download_button(
+            "Download selected result (.txt)",
+            data=downloads[f"{selected_section}.txt"],
+            file_name=f"{filename}_{selected_section}.txt",
+            mime="text/plain; charset=utf-8",
+            on_click="ignore",
+        )
+        st.caption("Reports include the title, summary, action items, decisions, open questions, transcript, and current chat. The ZIP also includes individual text files and structured JSON.")
 
     # Top row: summary + transcript
     col1, col2 = st.columns([3, 2], gap="medium")

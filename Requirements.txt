@@ -4,6 +4,7 @@
 # ── Audio / Video acquisition ─────────────────────────────────────────────────
 yt-dlp>=2024.4.9                  # Download audio from YouTube URLs
 pydub>=0.25.1                     # Audio file manipulation / format conversion
+audioop-lts>=0.2.1; python_version >= "3.13" # Compatibility for pydub on newer Python
 ffmpeg-python>=0.2.0              # FFmpeg bindings (FFmpeg binary must be installed separately)
 
 # ── Speech-to-Text (local Whisper) ────────────────────────────────────────────
@@ -18,6 +19,8 @@ deep-translator>=1.11.4           # Lightweight translation wrapper (Google back
 langchain>=0.2.0
 langchain-core>=0.2.0
 langchain-community>=0.2.0
+langchain-chroma>=0.1.0          # Chroma integration used by core/vector_store.py
+langchain-text-splitters>=0.2.0  # Transcript chunking
 langchain-mistralai>=0.1.0        # LangChain wrapper for Mistral API
 mistralai>=0.4.0                  # Official Mistral Python client
 

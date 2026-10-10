@@ -18,6 +18,7 @@ AI Video Assistant turns meeting recordings and YouTube videos into searchable m
 - Multi-turn conversational RAG with follow-up question rewriting
 - Bounded chat history to reduce prompt growth
 - Streamlit web interface
+- Download complete Markdown/text reports, individual results, and a ZIP with JSON and chat exports
 - Interactive Python CLI
 
 ## Architecture
@@ -170,6 +171,19 @@ WHISPER_MODEL=small
 
 ### Streamlit web interface
 
+For the configured Windows workspace, run this from PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+This uses the project's `.venv` and adds the project-local FFmpeg in
+`.tools/ffmpeg` to the app's process path. Add your real `MISTRAL_API_KEY`
+to `.env` before analysing a video; `SARVAM_API_KEY` is needed for Hinglish.
+Whisper and embedding models download on first use.
+
+For other environments:
+
 ```bash
 streamlit run app.py
 ```
@@ -183,6 +197,7 @@ In the sidebar:
 3. Select **Analyse**.
 4. Review the generated title, summary, transcript, action items, decisions, and open questions.
 5. Ask questions in the meeting chat.
+6. Use **Download results** to save a full report, an individual result, or the ZIP bundle. Reports and bundles include the current chat when available.
 
 The Streamlit application stores the current conversation in `st.session_state`. Starting a new analysis or clearing the chat resets the conversation history.
 

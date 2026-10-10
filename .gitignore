@@ -4,4 +4,7 @@ __pycache__/
 .env
 venv/
 .venv/
-docs/
+.tools/
+vector_db/
+downloades/
+docs/*
