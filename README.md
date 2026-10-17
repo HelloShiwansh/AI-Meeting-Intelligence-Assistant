@@ -1,10 +1,10 @@
 # AI Video Assistant
 
-AI Video Assistant turns meeting recordings and YouTube videos into searchable meeting intelligence. It extracts the audio, creates a transcript, generates a professional summary, identifies action items, decisions, and unresolved questions, and provides a conversational RAG chatbot grounded in the meeting transcript. The application supports follow-up questions. 
+AI Video Assistant turns meeting recordings, YouTube videos, and public Loom videos into searchable meeting intelligence. It extracts the audio, creates a transcript, generates a professional summary, identifies action items, decisions, and unresolved questions, and provides a conversational RAG chatbot grounded in the meeting transcript. The application supports follow-up questions.
 
 ## Features
 
-- YouTube URL and local audio/video file support
+- YouTube and public Loom links, local audio/video paths, and browser file uploads
 - Audio conversion to mono 16 kHz WAV
 - Ten-minute audio chunking for reliable transcription
 - English transcription with local OpenAI Whisper
@@ -24,7 +24,7 @@ AI Video Assistant turns meeting recordings and YouTube videos into searchable m
 ## Architecture
 
 ```text
-YouTube URL or local media file
+YouTube/Loom URL, uploaded file, or local media path
               |
               v
        Audio acquisition
@@ -87,7 +87,8 @@ The conversation history is used only to resolve references during question rewr
 |   |-- transcriber.py             # Whisper and Sarvam routing
 |   `-- vector_store.py            # Chroma indexing and retrieval
 |-- utils/
-|   `-- audio_processor.py         # Download, conversion, and chunking
+|   |-- audio_processor.py         # Download, conversion, and chunking
+|   `-- uploads.py                 # Temporary uploaded media and cleanup
 `-- docs/
     |-- technical-documentation.md # Current architecture and implementation
     `-- changes/                   # Implementation change notes
@@ -106,7 +107,7 @@ current architecture, module behavior, recovery, storage, and known limitations.
 - FFmpeg installed and available on `PATH`
 - An API key for your selected LLM provider (Mistral, Gemini, Groq, OpenAI, Anthropic, or an OpenAI-compatible service)
 - A Sarvam API key only when using Hinglish transcription
-- Internet access for YouTube downloads, API calls, and initial model downloads
+- Internet access for YouTube/Loom downloads, API calls, and initial model downloads
 - Enough disk space for Whisper, embedding models, downloaded media, and Chroma data
 
 Whisper runs locally, but it requires PyTorch and can use significant CPU, memory, and disk resources. The default Whisper model is `small` and can be changed with `WHISPER_MODEL`.
@@ -253,12 +254,21 @@ Then open the local URL shown by Streamlit, usually `http://localhost:8501`.
 
 In the sidebar:
 
-1. Enter a YouTube URL or local media-file path.
-2. Select `english` or `hinglish`.
-3. Select **Analyse**.
+1. Upload an audio/video file, or enter a YouTube/Loom URL or local media-file path. Use one source at a time.
+2. Select **English** or **Hinglish → English**.
+3. Select **Create my notes**.
 4. Review the generated title, summary, transcript, action items, decisions, and open questions.
 5. Ask questions in the meeting chat.
-6. Use **Download results** to save a full report, an individual result, or the ZIP bundle. Reports and bundles include the current chat when available.
+6. Open **Save & share** to save a full report, an individual result, or the ZIP bundle. Reports and bundles include the current chat when available.
+
+Uploads support MP4, MOV, MKV, WebM, AVI, M4V, MP3, WAV, M4A, AAC, OGG,
+FLAC, and Opus, subject to FFmpeg's decoder support. The uploader uses Streamlit's
+configured size limit (200 MB per file by default). Processing starts when you
+select **Create my notes**. An uploaded file gets a temporary copy on the app's
+computer; that copy, its converted WAV, and audio chunks are removed after
+transcription, including on failure. Your original file stays on your computer.
+Streamlit keeps the selected upload in session memory until you remove or
+replace it, or the session ends.
 
 The Streamlit application stores the current conversation in `st.session_state`. Starting a new analysis or clearing the chat resets the conversation history.
 
@@ -268,7 +278,7 @@ The Streamlit application stores the current conversation in `st.session_state`.
 python main.py
 ```
 
-The CLI asks for a YouTube URL or local file path and a transcription language. After processing, it starts an interactive chat. Type `exit`, `quit`, or `q` to leave.
+The CLI asks for a YouTube/Loom URL or local file path and a transcription language. After processing, it starts an interactive chat. Type `exit`, `quit`, or `q` to leave.
 
 ## Input Support
 
@@ -279,6 +289,22 @@ https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
 The application downloads the best available audio with `yt-dlp`, converts it to WAV, and chunks it for transcription.
+
+### Loom link
+
+Paste a public Loom video's share or embed link into the same link/path field:
+
+```text
+https://www.loom.com/share/VIDEO_ID
+https://www.loom.com/embed/VIDEO_ID
+```
+
+Loom uses the same audio download, WAV conversion, transcription, analysis,
+and chat pipeline as YouTube. No Loom API key is needed. The video must be
+accessible without a login or password; private/protected videos and Loom
+folder links are not supported. Download failures show the downloader's
+details and an access hint. Keep `yt-dlp` current when a site's download
+behavior changes. Downloaded WAV files and chunks remain in `downloades/`.
 
 ### Local file
 
@@ -397,7 +423,7 @@ When older messages exist, a turn can require an additional LLM call to create t
 The application creates local runtime data such as:
 
 - `vector_db/`: Chroma persistence directory
-- `downloades/`: downloaded audio files from YouTube
+- `downloades/`: downloaded audio files from YouTube and Loom
 - Converted WAV files and audio chunks next to the source media
 - Temporary Sarvam audio pieces, which are removed after each request
 

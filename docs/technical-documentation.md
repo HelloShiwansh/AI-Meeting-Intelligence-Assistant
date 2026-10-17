@@ -4,7 +4,7 @@ Updated: 2026-10-17. Describes the current implementation in this repository.
 
 ## Summary
 
-- Audio becomes a plain transcript through local Whisper or Sarvam's transcription/translation API.
+- Uploaded media, local paths, and YouTube/Loom URLs become a plain transcript through local Whisper or Sarvam's transcription/translation API. Uploaded processing files are temporary.
 - One shared analysis pass extracts summaries, tasks, decisions, and question/answer notes from overlapping transcript chunks, with up to three requests in flight.
 - An LLM merges chronological notes into the final report; bounded recovery handles large requests and cut-off output, with a visible review notice when model reconciliation cannot finish.
 - A shared provider factory supports Mistral, Gemini, Groq, OpenAI, Anthropic, and custom OpenAI-compatible endpoints through `.env`.
@@ -31,7 +31,7 @@ endpoint; Hinglish transcription also sends audio to Sarvam.
 
 ```mermaid
 flowchart TD
-    A[YouTube URL or local media path] --> B[Download or convert audio]
+    A[YouTube/Loom URL, uploaded file, or local media path] --> B[Download or convert audio]
     B --> C[Split audio into ten-minute files]
     C --> D[Whisper or Sarvam transcription]
     D --> E[Full transcript]
@@ -48,7 +48,7 @@ flowchart TD
 The entry points call the same underlying analysis implementation:
 
 - [`app.py`](../app.py) runs audio processing, transcription, shared analysis,
-  and RAG setup when the user selects **Analyse**. Results live in session state.
+  and RAG setup when the user selects **Create my notes**. Results live in session state.
 - [`main.py`](../main.py) exposes `run_pipeline(source, language="english")`,
   prints the resulting report, and starts an interactive chat when run directly.
 - [`test.py`](../test.py) is a manual runner with a hardcoded example URL. It
@@ -67,6 +67,7 @@ core/
   rag_engine.py      History compaction, rewriting, grounded answering
 utils/
   audio_processor.py Media acquisition, conversion, audio chunking
+  uploads.py         Temporary uploaded media and automatic cleanup
   exports.py         In-memory reports, JSON, and ZIP construction
 ```
 
@@ -80,10 +81,36 @@ with `http://` or `https://` to `yt-dlp`. It requests the best available audio,
 extracts WAV through FFmpeg, and writes under `downloades/` using the video title.
 This URL branch does not apply the local-file normalization step afterward.
 
+`download_video_audio()` serves both YouTube and public Loom share/embed links.
+It requests `bestaudio/best` and sets `noplaylist=True`. After extraction, it
+reads the final `filepath` from yt-dlp's `requested_downloads` metadata, rather
+than replacing particular extensions in `prepare_filename()` output. This
+handles MP4, WebM, M4A, and other source containers without altering dots or
+extension-like text inside a title. The resulting WAV must exist before
+chunking starts. Download errors retain their original details with an access
+hint. Loom folder links are rejected before downloading. Login/password
+handling is not implemented; no Loom API key is required for public videos.
+The dependency minimum is the tested `yt-dlp` version, 2026.8.19.
+
 For a local file, `convert_to_wav()` uses pydub to produce a mono, 16 kHz WAV
 beside the original file, with `_converted.wav` appended to its stem. Both
 branches then use `chunk_audio()` to create fixed ten-minute WAV pieces.
 These are time boundaries, not speaker or silence boundaries.
+
+The Streamlit form also accepts a single audio/video upload through
+`st.file_uploader`. It uses the extension list in [`utils/uploads.py`](../utils/uploads.py)
+and Streamlit's configured upload limit (200 MB per file by default). FFmpeg
+performs the actual media decoding. The form rejects missing input, empty uploads,
+and simultaneous upload plus link/path input before clearing existing results.
+Uploading alone does not start the pipeline; **Create my notes** submits the form.
+
+`media_source()` saves the upload under a fixed basename with its lowercase
+extension in a unique system temporary directory. The client filename cannot
+select the destination path. This path enters the existing local-file branch,
+so it becomes mono 16 kHz WAV before chunking. The context surrounds audio
+preparation and transcription: leaving it removes the upload, converted WAV,
+and chunks, on success or failure, before analysis starts. URL and local-path
+sources pass through this helper unchanged. No additional dependency is required.
 
 [`core/transcriber.py`](../core/transcriber.py) processes those pieces sequentially:
 
@@ -325,9 +352,13 @@ packages are listed among dependencies.
 
 ## Storage and external services
 
-- Downloaded audio and coarse audio chunks remain on disk. Local conversions
-  and their chunks are written beside the supplied media file. Only Sarvam's
-  short temporary pieces have automatic cleanup.
+- Uploaded media processing uses a unique system temporary directory, removed
+  after transcription or processing failure, including the converted WAV and
+  coarse chunks. Streamlit retains the selected upload in session memory until
+  it is removed/replaced or the session ends.
+- YouTube/Loom downloads and their coarse audio chunks remain on disk. For local
+  paths, conversions and chunks remain beside the supplied media file. Sarvam's
+  short temporary pieces also have automatic cleanup.
 - Whisper weights and embedding assets may download on first use and remain
   cached. Whisper's loaded model is shared within a process.
 - `vector_db/` persists transcript embeddings and chunks. The collection name
@@ -335,7 +366,7 @@ packages are listed among dependencies.
   Previous meeting content can therefore remain available to retrieval.
 - Analysis and chat state are in memory; there is no application-level meeting
   database or automatic report archive. User downloads are the report-saving path.
-- Network access can include YouTube, model downloads, the selected LLM service,
+- Network access can include YouTube, Loom, model downloads, the selected LLM service,
   Sarvam for Hinglish, and the Google Fonts import used by the app's CSS.
 - CLI processing prints a transcript preview, and `ask_question()` prints chat
   questions and answers. Treat console logs as meeting content.

@@ -6,6 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from utils.exports import RESULT_SECTIONS, build_downloads, export_filename
+from utils.uploads import MEDIA_EXTENSIONS, media_source
 
 load_dotenv()
 st.set_page_config(
@@ -47,12 +48,17 @@ with st.sidebar:
     st.space("small")
     st.badge("Your workspace", icon=":material/auto_awesome:", color="green")
     st.subheader("Start with a video")
-    st.caption("Start with a meeting, a lecture, or a YouTube video.")
+    st.caption("Start with a meeting, a lecture, or a YouTube or Loom video.")
     with st.form("recording_form", border=False):
         source = st.text_input(
-            "YouTube link or local file path", placeholder="Paste a link or file path…",
-            help="For a local video, enter its full path on the computer running this app.",
+            "YouTube / Loom link or local file path", placeholder="Paste a link or file path…",
+            help="Use a public YouTube or Loom video link. For a local file, enter its full path on the computer running this app.",
             key="recording_source",
+        )
+        uploaded_file = st.file_uploader(
+            "Or upload audio or video", type=MEDIA_EXTENSIONS,
+            help="Choose one file, leaving the link/path field empty. Processing files are temporary.",
+            key="recording_upload",
         )
         language = st.selectbox(
             "Spoken language", ["english", "hinglish"],
@@ -69,7 +75,8 @@ with st.sidebar:
     with st.expander("What can I start with?", icon=":material/help_outline:"):
         st.markdown(
             "- **YouTube:** paste the video's full URL.\n"
-            "- **Audio or video:** paste the full local file path.\n"
+            "- **Loom:** paste a public video's share or embed link. Protected videos aren't supported.\n"
+            "- **Audio or video:** upload a file, or paste its full local file path.\n"
             "- **English or Hinglish:** choose the language spoken in the video."
         )
 
@@ -84,8 +91,12 @@ st.markdown("Turn your videos into useful notes, clear next steps, and answers y
 st.space("small")
 
 if run_btn:
-    if not source.strip():
-        st.warning("Add a YouTube link or a local file path in the sidebar to get started.", icon=":material/link:")
+    if uploaded_file is not None and source.strip():
+        st.warning("Choose one source: remove the uploaded file or clear the link/path field.", icon=":material/info:")
+    elif uploaded_file is None and not source.strip():
+        st.warning("Upload a file or add a YouTube / Loom link or local file path in the sidebar to get started.", icon=":material/link:")
+    elif uploaded_file is not None and uploaded_file.size == 0:
+        st.warning("The uploaded file is empty. Choose another file.", icon=":material/info:")
     else:
         st.session_state.result = None
         st.session_state.chat_history = []
@@ -105,11 +116,12 @@ if run_btn:
 
                 update_step("audio", "active")
                 st.write("Preparing your audio.")
-                chunks = process_input(source.strip())
-                update_step("audio", "done")
-                update_step("transcript", "active")
-                st.write("Listening and writing your transcript.")
-                transcript = transcribe_all(chunks, language)
+                with media_source(source.strip(), uploaded_file) as processing_source:
+                    chunks = process_input(processing_source)
+                    update_step("audio", "done")
+                    update_step("transcript", "active")
+                    st.write("Listening and writing your transcript.")
+                    transcript = transcribe_all(chunks, language)
                 update_step("transcript", "done")
                 update_step("analysis", "active")
                 analysis_progress = st.empty()
@@ -134,7 +146,7 @@ if run_btn:
                 render_steps(sidebar_progress)
                 status.update(label="We couldn't finish this video", state="error", expanded=True)
                 st.error(str(exc))
-                st.caption("Check your link or file path and provider settings, then try again.")
+                st.caption("Check your media source and provider settings, then try again.")
         if st.session_state.pipeline_done:
             st.rerun()
 
@@ -239,7 +251,7 @@ else:
         with st.container(border=True):
             st.markdown("**Your first set of notes is three little steps away.**")
             st.markdown(
-                "1. **Add your video** — paste a link or local file path in the sidebar.\n"
+                "1. **Add your video** — upload a file or paste a link or local file path in the sidebar.\n"
                 "2. **Choose the language** — English or Hinglish.\n"
                 "3. **Make it useful** — create your notes, then ask away."
             )
