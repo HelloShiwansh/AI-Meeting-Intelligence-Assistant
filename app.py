@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from utils.exports import RESULT_SECTIONS, build_downloads, export_filename
 from utils.uploads import MEDIA_EXTENSIONS, media_source
+from utils.chat_citations import render_chat_sources, render_chat_playback
 
 load_dotenv()
 st.set_page_config(
@@ -102,6 +103,7 @@ if run_btn:
         st.session_state.chat_history = []
         st.session_state.pipeline_done = False
         st.session_state.pipeline_steps = {}
+        st.session_state.pop("chat_playback", None)
         with st.status("Making sense of your video…", expanded=True) as status:
             try:
                 # Keep the welcome screen light: load model integrations on submission.
@@ -121,7 +123,8 @@ if run_btn:
                     update_step("audio", "done")
                     update_step("transcript", "active")
                     st.write("Listening and writing your transcript.")
-                    transcript = transcribe_all(chunks, language)
+                    timed_transcript = transcribe_all(chunks, language, with_timestamps=True)
+                    transcript = timed_transcript.text
                 update_step("transcript", "done")
                 update_step("analysis", "active")
                 analysis_progress = st.empty()
@@ -134,9 +137,19 @@ if run_btn:
                 update_step("analysis", "done")
                 update_step("rag", "active")
                 st.write("Getting ready for your questions.")
-                rag_chain = build_rag_chain(transcript)
+                rag_chain = build_rag_chain(timed_transcript, source_url=source.strip())
                 update_step("rag", "done")
-                st.session_state.result = {**analysis, "transcript": transcript, "rag_chain": rag_chain}
+                playback = None
+                if uploaded_file is not None:
+                    # Keep the original upload for cited playback after temporary
+                    # processing files are removed. Never include it in exports.
+                    playback = {"data": uploaded_file.getvalue(), "name": uploaded_file.name}
+                elif not source.strip().startswith(("http://", "https://")):
+                    playback = {"path": source.strip(), "name": Path(source.strip()).name}
+                st.session_state.result = {
+                    **analysis, "transcript": transcript, "rag_chain": rag_chain,
+                    "transcript_segments": timed_transcript.segments, "playback": playback,
+                }
                 st.session_state.pipeline_done = True
                 status.update(label="Your notes are ready. Let's take a look!", state="complete", expanded=False)
             except Exception as exc:
@@ -210,9 +223,10 @@ if st.session_state.result:
             prompt = None
             with st.container(height=370, border=False):
                 if st.session_state.chat_history:
-                    for message in st.session_state.chat_history:
+                    for message_index, message in enumerate(st.session_state.chat_history):
                         with st.chat_message(message["role"]):
                             st.markdown(message["content"])
+                            render_chat_sources(message, message_index, result.get("playback"))
                 else:
                     st.space("small")
                     st.markdown("**A good question goes a long way.**")
@@ -223,16 +237,19 @@ if st.session_state.result:
                     ]):
                         if st.button(question, key=f"suggestion_{index}", width="stretch"):
                             prompt = question
+            render_chat_playback(result.get("playback"))
             typed_prompt = st.chat_input("Ask about your video…", key="meeting_question")
             prompt = typed_prompt or prompt
             if prompt and prompt.strip():
                 try:
-                    from core.rag_engine import ask_question
+                    from core.rag_engine import ask_question_with_sources
 
                     with st.spinner("Looking through your transcript…"):
-                        answer = ask_question(result["rag_chain"], prompt.strip(), st.session_state.chat_history)
+                        response = ask_question_with_sources(result["rag_chain"], prompt.strip(), st.session_state.chat_history)
                     st.session_state.chat_history.extend([
-                        {"role": "user", "content": prompt.strip()}, {"role": "assistant", "content": answer},
+                        {"role": "user", "content": prompt.strip()},
+                        {"role": "assistant", "content": response["answer"],
+                         "citations": response["citations"], "citation_notice": response.get("citation_notice", "")},
                     ])
                     st.rerun()
                 except Exception as exc:
@@ -241,6 +258,7 @@ if st.session_state.result:
             if st.session_state.chat_history:
                 if st.button("Clear conversation", icon=":material/restart_alt:", type="tertiary"):
                     st.session_state.chat_history = []
+                    st.session_state.pop("chat_playback", None)
                     st.rerun()
         st.caption("Answers are based on the transcript. Double-check important details against the video.")
 else:

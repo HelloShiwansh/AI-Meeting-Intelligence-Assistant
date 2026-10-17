@@ -11,3 +11,4 @@ docs/*
 !docs/changes/
 !docs/technical-documentation.md
 tests/
+checks/

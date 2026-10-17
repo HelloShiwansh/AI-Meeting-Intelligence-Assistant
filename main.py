@@ -13,17 +13,19 @@ def run_pipeline(source :str, language :str = "english") -> dict:
 
     chunks = process_input(source)
 
-    transcript = transcribe_all(chunks,language)
+    timed_transcript = transcribe_all(chunks, language, with_timestamps=True)
+    transcript = timed_transcript.text
     print(f"raw transcription (first 300 characters ) {transcript[:300]}")
 
     analysis = analyze_meeting(transcript)
     
-    rag_chain = build_rag_chain(transcript)
+    rag_chain = build_rag_chain(timed_transcript, source_url=source)
 
     return {
         **analysis,
         "transcript": transcript,
         "rag_chain": rag_chain,
+        "transcript_segments": timed_transcript.segments,
     }
 
 if __name__ == "__main__":

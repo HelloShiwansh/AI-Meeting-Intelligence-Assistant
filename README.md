@@ -17,6 +17,8 @@ AI Video Assistant turns meeting recordings, YouTube videos, and public Loom vid
 - Transcript-grounded RAG chat using Chroma and sentence-transformer embeddings
 - Multi-turn conversational RAG with follow-up question rewriting
 - Bounded chat history to reduce prompt growth
+- Timestamped chatbot citations with source excerpts and YouTube time links
+- Cited playback for uploaded/local audio and video; approximate Hinglish passage times
 - Streamlit web interface
 - Download complete Markdown/text reports, individual results, and a ZIP with JSON and chat exports
 - Interactive Python CLI
@@ -418,6 +420,46 @@ For final answer generation:
 
 When older messages exist, a turn can require an additional LLM call to create the compact history summary. The normal flow therefore uses question rewriting and answer generation, with summarization added only when needed.
 
+## Timestamped chatbot citations
+
+New analyses preserve Whisper segment times or approximate Sarvam passage ranges.
+The chatbot cites retrieved passages beside each answer claim, for example
+`[04:12–04:29]`. Expand **Sources** under an answer to inspect its evidence.
+YouTube sources link to the original video at that time. Uploaded and local
+files offer **Play from…** controls when the browser supports their media format.
+Loom citations display timestamps and excerpts; Loom jump-to-time playback is
+not included. `≈` means an approximate passage/chunk range, not sentence timing.
+
+Only chatbot answers get citations. Summaries, action items, decisions, and
+questions still receive plain text and do not gain citations automatically.
+Whisper timestamps are model estimates and can be imperfect. Source validation
+checks IDs and time ranges; it does not prove the model's claim is supported.
+Malformed or invalid citation responses trigger at most one additional model
+call before an explicit error; authentication/network errors are not hidden.
+
+Re-analyze old videos to capture timestamps. Plain-text callers remain supported
+without fabricated times. Code can opt in using
+`transcribe_all(chunks, language, with_timestamps=True)` and pass that result to
+`build_rag_chain(timed_transcript, source_url=source)`.
+`ask_question_with_sources(chain, question, history)` returns `answer` and
+`citations`; the existing `ask_question` still returns a string.
+
+Each new index has an isolated collection. To reload a particular analysis,
+save `chain.collection_name` and call `load_rag_chain(collection_name)`.
+The no-argument loader still refers to the old legacy collection.
+Original uploaded media is retained only in the current session for playback;
+processing files are still removed. Chat exports retain cited excerpts and
+timestamps, but never include media bytes or local playback paths.
+
+Offline regression checks (no model downloads or API keys):
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s checks -p "test_timestamp*.py" -v
+```
+
+The tests use synthetic WAVs, local test embeddings, and simulated chat-model
+responses. They verify functionality, not real-world transcription or answer quality.
+
 ## Storage and Generated Files
 
 The application creates local runtime data such as:
@@ -431,7 +473,7 @@ These files can be large. Review storage and cleanup behavior before processing 
 
 ## Limitations and Future Improvements
 
-- The current vector-store collection name is shared, so production use should isolate collections per meeting.
+- New analyses use separate vector-store collections; old legacy collections are not migrated automatically. Persisted collections still need a retention/cleanup policy.
 - Audio and generated artifacts need an explicit cleanup policy for long-term use.
 - The final answer is grounded in retrieved transcript chunks; retrieval quality depends on chunking and embedding quality.
 - The current conversational summary is generated on demand when older turns exceed the recent-message window.

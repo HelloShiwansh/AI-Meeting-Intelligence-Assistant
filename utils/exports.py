@@ -23,10 +23,20 @@ def export_filename(title: str) -> str:
 
 
 def format_chat(chat_history: list[dict]) -> str:
-    return "\n\n".join(
-        f"{'You' if message['role'] == 'user' else 'Assistant'}:\n{message['content']}"
-        for message in chat_history
-    )
+    entries = []
+    for message in chat_history:
+        entry = f"{'You' if message['role'] == 'user' else 'Assistant'}:\n{message['content']}"
+        citations = message.get("citations", [])
+        if citations:
+            entry += "\n\nSources:\n" + "\n".join(
+                f"- {c['id']} [{c['label']}] ({c['timing_precision']}): {c['text']}"
+                + (f"\n  {c['url']}" if c.get("url") else "")
+                for c in citations
+            )
+        if message.get("citation_notice"):
+            entry += "\n" + message["citation_notice"]
+        entries.append(entry)
+    return "\n\n".join(entries)
 
 
 def build_downloads(result: dict, chat_history: list[dict]) -> dict[str, bytes]:
@@ -44,7 +54,9 @@ def build_downloads(result: dict, chat_history: list[dict]) -> dict[str, bytes]:
     ) + "\n"
     structured = {"title": title, **{key: result[key] for key, _ in RESULT_SECTIONS}}
     structured["chat_history"] = [
-        {"role": message["role"], "content": message["content"]}
+        {"role": message["role"], "content": message["content"],
+         **({"citations": message["citations"]} if message.get("citations") else {}),
+         **({"citation_notice": message["citation_notice"]} if message.get("citation_notice") else {})}
         for message in chat_history
     ]
 
