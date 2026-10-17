@@ -22,6 +22,10 @@ langchain-community>=0.2.0
 langchain-chroma>=0.1.0          # Chroma integration used by core/vector_store.py
 langchain-text-splitters>=0.2.0  # Transcript chunking
 langchain-mistralai>=0.1.0        # LangChain wrapper for Mistral API
+langchain-google-genai>=4.0.0    # Gemini Developer API
+langchain-groq>=1.0.0            # Groq chat models
+langchain-openai>=1.0.0          # OpenAI and compatible chat endpoints
+langchain-anthropic>=1.0.0       # Anthropic Claude chat models
 mistralai>=0.4.0                  # Official Mistral Python client
 
 # ── RAG Pipeline ──────────────────────────────────────────────────────────────

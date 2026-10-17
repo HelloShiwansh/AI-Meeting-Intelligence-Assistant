@@ -92,7 +92,7 @@ The conversation history is used only to resolve references during question rewr
 
 - Python 3.10 or newer
 - FFmpeg installed and available on `PATH`
-- A Mistral API key
+- An API key for your selected LLM provider (Mistral, Gemini, Groq, OpenAI, Anthropic, or an OpenAI-compatible service)
 - A Sarvam API key only when using Hinglish transcription
 - Internet access for YouTube downloads, API calls, and initial model downloads
 - Enough disk space for Whisper, embedding models, downloaded media, and Chroma data
@@ -161,11 +161,60 @@ Copy `.env.example` to `.env` and add your keys:
 
 ```env
 MISTRAL_API_KEY=your_mistral_api_key
+LLM_PROVIDER=mistral
+LLM_MODEL=mistral-small-latest
 SARVAM_API_KEY=your_sarvam_api_key
 WHISPER_MODEL=small
 ```
 
 `SARVAM_API_KEY` is required only for `hinglish` mode. Never commit `.env` or API keys to GitHub.
+
+### Switching LLM providers
+
+All title, summary, extraction, and conversational RAG calls use the shared
+factory in `core/llm.py`. Set `LLM_PROVIDER`, `LLM_MODEL`, and the matching key
+in `.env`, then restart the app. Choose a model ID available in your provider
+account; a valid key does not guarantee access to every model.
+
+- `mistral`: `MISTRAL_API_KEY`
+- `gemini`: `GOOGLE_API_KEY` (Gemini Developer API)
+- `groq`: `GROQ_API_KEY`
+- `openai`: `OPENAI_API_KEY`
+- `anthropic`: `ANTHROPIC_API_KEY` (Claude models)
+- `openai_compatible`: `LLM_API_KEY` and `LLM_BASE_URL` (the service's API base URL, usually ending in `/v1`)
+
+For example, to select Groq:
+
+```env
+LLM_PROVIDER=groq
+LLM_MODEL=your_available_groq_model_id
+GROQ_API_KEY=your_groq_api_key
+```
+
+For Anthropic Claude:
+
+```env
+LLM_PROVIDER=anthropic
+LLM_MODEL=your_available_claude_model_id
+ANTHROPIC_API_KEY=your_anthropic_api_key
+```
+
+For another OpenAI-compatible service:
+
+```env
+LLM_PROVIDER=openai_compatible
+LLM_MODEL=your_service_model_id
+LLM_BASE_URL=https://your-service.example/v1
+LLM_API_KEY=your_service_api_key
+```
+
+Install the updated `Requirements.txt` once to get all supported integrations.
+Only the selected integration is imported at runtime. Missing keys or integrations
+produce configuration errors; the app never silently switches providers.
+Existing `.env` files with only `MISTRAL_API_KEY` continue to use
+`mistral-small-latest`. Environment variables already set in your shell take
+precedence over `.env`; remove stale shell values when switching configurations.
+Speech transcription and local embeddings are configured separately.
 
 ## Running the Application
 
@@ -178,8 +227,8 @@ powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
 This uses the project's `.venv` and adds the project-local FFmpeg in
-`.tools/ffmpeg` to the app's process path. Add your real `MISTRAL_API_KEY`
-to `.env` before analysing a video; `SARVAM_API_KEY` is needed for Hinglish.
+`.tools/ffmpeg` to the app's process path. Configure your chosen LLM provider
+and its real API key in `.env` before analysing a video; `SARVAM_API_KEY` is needed for Hinglish.
 Whisper and embedding models download on first use.
 
 For other environments:
