@@ -1,0 +1,31 @@
+# Adapted from Streamlit's Solarized Light template for a calmer meeting workspace.
+[theme]
+base = "light"
+primaryColor = "#237567"
+backgroundColor = "#FCFAF5"
+secondaryBackgroundColor = "#F0F0E8"
+textColor = "#253C36"
+linkColor = "#237567"
+borderColor = "#DDDFD5"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "16px"
+buttonRadius = "12px"
+font = "sans-serif"
+headingFont = "serif"
+baseFontSize = 16
+headingFontSizes = ["44px", "32px", "23px", "20px", "18px", "16px"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+greenColor = "#237567"
+greenBackgroundColor = "#E2EFE6"
+greenTextColor = "#245B4B"
+orangeColor = "#A25929"
+orangeBackgroundColor = "#F8EBD7"
+orangeTextColor = "#85451E"
+codeBackgroundColor = "#F0F0E8"
+
+[theme.sidebar]
+backgroundColor = "#EEF2E9"
+secondaryBackgroundColor = "#FCFAF5"
+textColor = "#253C36"
+borderColor = "#D8E0D4"
