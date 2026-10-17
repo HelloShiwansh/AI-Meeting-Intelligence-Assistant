@@ -7,7 +7,7 @@ DOWNLOAD_DIR = 'downloades'
 os.makedirs(DOWNLOAD_DIR,exist_ok = True)
 
 def download_video_audio(url: str) -> str:
-    """Download one accessible online video and return its postprocessed WAV."""
+    """Download one accessible video as mono, 16 kHz, 16-bit PCM WAV."""
     parsed = urlparse(url)
     if parsed.hostname in {"loom.com", "www.loom.com"} and parsed.path.startswith("/share/folder/"):
         raise ValueError("Use a single Loom video's share or embed link, rather than a folder link.")
@@ -20,9 +20,12 @@ def download_video_audio(url: str) -> str:
             {
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "wav",
-                "preferredquality": "192",
             }
         ],
+        # Normalize during extraction so downloads need no second WAV copy.
+        "postprocessor_args": {
+            "extractaudio+ffmpeg_o": ["-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le"],
+        },
         "quiet": True,
     }
     try:
@@ -45,17 +48,19 @@ def download_video_audio(url: str) -> str:
 
 
 def convert_to_wav(input_path: str) -> str:
-    """Convert any audio/video file to WAV format using pydub."""
+    """Convert local/uploaded media to mono, 16 kHz, 16-bit PCM WAV."""
     output_path = os.path.splitext(input_path)[0] + "_converted.wav"
     audio = AudioSegment.from_file(input_path)
-    audio = audio.set_channels(1).set_frame_rate(16000) #16khz
-    audio.export(output_path, format="wav")
+    audio = audio.set_channels(1).set_frame_rate(16000).set_sample_width(2)
+    with audio.export(output_path, format="wav"):
+        pass
     return output_path
 
 
 
 def chunk_audio(wav_path : str , chunk_minutes : int = 10) -> list:
-    audio = AudioSegment.from_wav(wav_path)
+    with open(wav_path, "rb") as source:
+        audio = AudioSegment.from_wav(source)
     chunk_ms = chunk_minutes * 60 * 1000 
 
     chunks = []
@@ -63,7 +68,8 @@ def chunk_audio(wav_path : str , chunk_minutes : int = 10) -> list:
     for i, start in enumerate(range(0,len(audio),chunk_ms)):
         chunk = audio[start : start + chunk_ms]
         chunk_path = f"{wav_path}_chunk_{i}.wav"
-        chunk.export(chunk_path , format = "wav")
+        with chunk.export(chunk_path, format="wav"):
+            pass
 
         chunks.append(chunk_path)
     

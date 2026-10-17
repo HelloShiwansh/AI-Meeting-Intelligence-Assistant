@@ -5,7 +5,7 @@ AI Video Assistant turns meeting recordings, YouTube videos, and public Loom vid
 ## Features
 
 - YouTube and public Loom links, local audio/video paths, and browser file uploads
-- Audio conversion to mono 16 kHz WAV
+- Consistent mono 16 kHz, 16-bit PCM WAV for every input
 - Ten-minute audio chunking for reliable transcription
 - English transcription with local OpenAI Whisper
 - Hinglish transcription and English translation with Sarvam AI
@@ -288,7 +288,7 @@ The CLI asks for a YouTube/Loom URL or local file path and a transcription langu
 https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
-The application downloads the best available audio with `yt-dlp`, converts it to WAV, and chunks it for transcription.
+The application downloads the best available audio with `yt-dlp`, converts it directly to mono 16 kHz, 16-bit PCM WAV, and chunks it for transcription. YouTube, Loom, local paths, and uploads all use this same final audio format.
 
 ### Loom link
 
@@ -314,7 +314,7 @@ Pass a local audio or video path supported by FFmpeg and pydub:
 C:\path\to\meeting.mp4
 ```
 
-The input is converted to mono 16 kHz WAV before chunking.
+The input is converted to mono 16 kHz, 16-bit PCM WAV before chunking.
 
 ## Transcription Modes
 

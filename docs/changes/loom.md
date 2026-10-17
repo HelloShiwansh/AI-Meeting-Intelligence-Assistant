@@ -3,7 +3,7 @@
 ## Summary
 
 - Added public Loom share/embed links to the existing link input in Streamlit and the CLI.
-- Reused yt-dlp and the existing WAV, chunking, transcription, analysis, and chat pipeline; no Loom API key or separate integration is needed.
+- Reused yt-dlp and the existing pipeline; every input now produces mono 16 kHz, 16-bit PCM WAV before chunking, with no Loom API key needed.
 - Fixed downloaded-file detection to use the actual WAV path reported after conversion, including when Loom supplies MP4 instead of WebM/M4A.
 - Added an access hint for failed downloads and rejected Loom folder links; login/password support is outside this change.
 - Updated documentation and the yt-dlp minimum to the tested version, with checks for Loom routing, filename handling, errors, and existing inputs.
@@ -22,10 +22,14 @@ WAV. It now reads yt-dlp's postprocessed `requested_downloads[0].filepath`
 Previously, replacing `.webm` and `.m4a` in the original prepared filename
 could return an MP4 filename or alter matching text inside a title.
 
-The URL branch keeps its existing audio format and storage behavior: FFmpeg
-extracts WAV into `downloades/`, then the app makes ten-minute chunks. This
-change does not add mono/16 kHz normalization to downloaded videos. Uploads
-and local file paths continue through their existing conversion flow.
+All inputs now produce mono 16 kHz, 16-bit PCM WAV before ten-minute chunking.
+For YouTube and Loom, `extractaudio+ffmpeg_o` supplies `-ac 1 -ar 16000 -c:a
+pcm_s16le` during the existing FFmpeg extraction, so no second WAV conversion
+or copy is needed. Local files and uploads use pydub's `set_channels(1)`,
+`set_frame_rate(16000)`, and `set_sample_width(2)`. The unused compressed-audio
+quality setting was removed. Storage and upload cleanup behave as before.
+Previously generated files are not changed in bulk; rerun processing to
+generate normalized output. This changes the audio format, not its volume.
 
 Only individual Loom videos accessible without signing in or supplying a
 password are supported. Folder links fail before download. Download errors
@@ -43,6 +47,12 @@ A live smoke check also downloaded yt-dlp's public 26.7-second Loom example,
 opened the converted WAV, and created a transcription-ready chunk. The smoke
 check used a temporary directory and removed its test media afterward; it
 made no transcription or LLM calls.
+
+Normalization checks read actual WAV headers for downloaded MP4 audio, local
+audio/video, uploads, and their chunks: one channel, 16,000 Hz, and two bytes
+per sample, with duration preserved. A further live Loom check verified the
+same format in the downloaded WAV and chunk. WAV output and chunk file handles
+are closed explicitly so upload cleanup can release them on Windows.
 
 ## File uploads
 

@@ -78,8 +78,10 @@ shared transcript-analysis stage, not across transcription and indexing.
 
 [`utils/audio_processor.py`](../utils/audio_processor.py) routes strings starting
 with `http://` or `https://` to `yt-dlp`. It requests the best available audio,
-extracts WAV through FFmpeg, and writes under `downloades/` using the video title.
-This URL branch does not apply the local-file normalization step afterward.
+extracts mono 16 kHz, 16-bit PCM WAV through FFmpeg, and writes under
+`downloades/` using the video title. The `extractaudio+ffmpeg_o` output options
+apply `-ac 1 -ar 16000 -c:a pcm_s16le` during extraction, avoiding a second
+WAV conversion and copy. This is format normalization, not volume normalization.
 
 `download_video_audio()` serves both YouTube and public Loom share/embed links.
 It requests `bestaudio/best` and sets `noplaylist=True`. After extraction, it
@@ -92,10 +94,13 @@ hint. Loom folder links are rejected before downloading. Login/password
 handling is not implemented; no Loom API key is required for public videos.
 The dependency minimum is the tested `yt-dlp` version, 2026.8.19.
 
-For a local file, `convert_to_wav()` uses pydub to produce a mono, 16 kHz WAV
+For a local file, `convert_to_wav()` uses pydub to produce a mono, 16 kHz, 16-bit PCM WAV
 beside the original file, with `_converted.wav` appended to its stem. Both
 branches then use `chunk_audio()` to create fixed ten-minute WAV pieces.
-These are time boundaries, not speaker or silence boundaries.
+These are time boundaries, not speaker or silence boundaries. Both paths and
+their chunks have the same sample rate, channel count, and sample width.
+Existing files are not changed in bulk; the format applies when processing
+media again.
 
 The Streamlit form also accepts a single audio/video upload through
 `st.file_uploader`. It uses the extension list in [`utils/uploads.py`](../utils/uploads.py)
