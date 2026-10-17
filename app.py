@@ -6,8 +6,7 @@ load_dotenv()
 
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
-from core.summarizer import summarize, generate_title
-from core.extractor import extract_action_items, extract_key_decisions, extract_questions
+from core.analysis import analyze_meeting
 from core.rag_engine import build_rag_chain, ask_question
 from utils.exports import RESULT_SECTIONS, build_downloads, export_filename
 
@@ -350,9 +349,7 @@ with st.sidebar:
         for step, icon, label in [
             ("audio",      "🔊", "Audio Processing"),
             ("transcript", "📝", "Transcription"),
-            ("title",      "🏷️", "Title Generation"),
-            ("summary",    "📋", "Summarisation"),
-            ("extract",    "🔍", "Extraction"),
+            ("analysis",   "📋", "Meeting Analysis"),
             ("rag",        "🧠", "RAG Engine"),
         ]:
             render_step_bar(label, step, icon)
@@ -389,31 +386,22 @@ if run_btn:
             transcript = transcribe_all(chunks, language)
             update_step("transcript", "done")
 
-            update_step("title", "active")
-            title = generate_title(transcript)
-            update_step("title", "done")
+            update_step("analysis", "active")
 
-            update_step("summary", "active")
-            summary = summarize(transcript)
-            update_step("summary", "done")
+            def show_analysis_progress(stage, completed, total):
+                label = "Analysing transcript sections" if stage == "chunks" else "Combining meeting notes"
+                progress_placeholder.info(f"{label}: {completed}/{total}")
 
-            update_step("extract", "active")
-            action_items  = extract_action_items(transcript)
-            decisions     = extract_key_decisions(transcript)
-            questions     = extract_questions(transcript)
-            update_step("extract", "done")
+            analysis = analyze_meeting(transcript, on_progress=show_analysis_progress)
+            update_step("analysis", "done")
 
             update_step("rag", "active")
             rag_chain = build_rag_chain(transcript)
             update_step("rag", "done")
 
             st.session_state.result = {
-                "title": title,
+                **analysis,
                 "transcript": transcript,
-                "summary": summary,
-                "action_items": action_items,
-                "key_decisions": decisions,
-                "open_questions": questions,
                 "rag_chain": rag_chain,
             }
             st.session_state.pipeline_done = True
@@ -423,7 +411,7 @@ if run_btn:
             st.rerun()
 
         except Exception as e:
-            for k in ["audio","transcript","title","summary","extract","rag"]:
+            for k in ["audio","transcript","analysis","rag"]:
                 if st.session_state.pipeline_steps.get(k) == "active":
                     st.session_state.pipeline_steps[k] = "pending"
             progress_placeholder.error(f"❌ Error: {e}")

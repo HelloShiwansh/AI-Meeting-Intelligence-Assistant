@@ -3,8 +3,7 @@ load_dotenv()   # MUST be before any core/ imports
 
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
-from core.summarizer import summarize, generate_title
-from core.extractor import extract_action_items, extract_key_decisions, extract_questions
+from core.analysis import analyze_meeting
 
 
 source = "https://www.youtube.com/watch?v=_Q-e_nczWqM&t=223s"
@@ -22,8 +21,9 @@ print("=" * 60)
 print(transcript[:500] + "..." if len(transcript) > 500 else transcript)
 
 
-title = generate_title(transcript)
-summary = summarize(transcript)
+analysis = analyze_meeting(transcript)
+title = analysis["title"]
+summary = analysis["summary"]
 
 print("\n" + "=" * 60)
 print(f"📌 TITLE: {title}")
@@ -34,9 +34,9 @@ print(summary)
 
 
 
-action_items = extract_action_items(transcript)
-decisions = extract_key_decisions(transcript)
-questions = extract_questions(transcript)
+action_items = analysis["action_items"]
+decisions = analysis["key_decisions"]
+questions = analysis["open_questions"]
 
 print("\n" + "=" * 60)
 print("✅ ACTION ITEMS")

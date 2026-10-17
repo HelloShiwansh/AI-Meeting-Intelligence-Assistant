@@ -10,7 +10,7 @@ AI Video Assistant turns meeting recordings and YouTube videos into searchable m
 - English transcription with local OpenAI Whisper
 - Hinglish transcription and English translation with Sarvam AI
 - Automatic meeting title generation
-- Map-reduce meeting summarization
+- Shared chunk analysis for summaries, tasks, decisions, and questions
 - Action-item extraction with owner and deadline when available
 - Key-decision extraction
 - Open-question and follow-up extraction
@@ -37,15 +37,17 @@ YouTube URL or local media file
               v
           Meeting transcript
               |
-      +-------+--------+----------------+
-      |                |                |
-      v                v                v
-   Summary       Extraction        Vector store
-                                    Chroma +
-                              HuggingFace embeddings
-                                        |
-                                        v
-                                Conversational RAG
+      +---------------------------+
+      |                           |
+      v                           v
+  Shared chunk analysis       Vector store
+  (bounded concurrency)         Chroma +
+      |                   HuggingFace embeddings
+      v                           |
+  Merge chronological notes       v
+      |                   Conversational RAG
+      v
+  Title + summary + tasks + decisions + open questions
 ```
 
 ### RAG request flow
@@ -77,16 +79,26 @@ The conversation history is used only to resolve references during question rewr
 |-- Requirements.txt               # Python dependencies
 |-- .env.example                   # Environment variable template
 |-- core/
-|   |-- extractor.py               # Action items, decisions, questions
+|   |-- analysis.py                # Shared chunk analysis and bounded merges
+|   |-- llm.py                     # Configurable provider factory
+|   |-- extractor.py               # Extraction compatibility helpers
 |   |-- rag_engine.py              # Conversational RAG chain
-|   |-- summarizer.py              # Title and summary generation
+|   |-- summarizer.py              # Title/summary compatibility helpers
 |   |-- transcriber.py             # Whisper and Sarvam routing
 |   `-- vector_store.py            # Chroma indexing and retrieval
 |-- utils/
 |   `-- audio_processor.py         # Download, conversion, and chunking
 `-- docs/
-    `-- changes/                   # Local implementation notes
+    |-- technical-documentation.md # Current architecture and implementation
+    `-- changes/                   # Implementation change notes
 ```
+
+Read the [implementation change notes](docs/changes/) for short summaries and
+details of provider configuration, shared chunk analysis, conversational RAG,
+and result downloads.
+
+Read the [technical documentation](docs/technical-documentation.md) for the
+current architecture, module behavior, recovery, storage, and known limitations.
 
 ## Requirements
 
@@ -293,11 +305,61 @@ Whisper is loaded lazily on first use. Sarvam requests are split into 25-second 
 
 1. **Audio processing**: download or convert the input and split it into ten-minute WAV chunks.
 2. **Transcription**: process every chunk with Whisper or Sarvam.
-3. **Title generation**: ask Mistral for a short professional meeting title.
-4. **Summarization**: split the transcript into larger sections, summarize each section, and combine the partial summaries.
-5. **Extraction**: identify action items, key decisions, and unresolved questions.
-6. **RAG indexing**: split the transcript into 500-character chunks with 50-character overlap and store embeddings in Chroma.
-7. **Conversational chat**: rewrite follow-up questions, retrieve four relevant chunks, and generate a transcript-grounded answer.
+3. **Shared analysis**: split the transcript into overlapping sections. In one LLM call per section, extract a summary, action items with owners/deadlines, decisions, and questions with any explicit answers. Process at most three sections concurrently by default.
+4. **Merge**: combine the chronological notes, deduplicate overlap, reconcile changed decisions, and match questions to answers from later sections. Generate the final title from the combined material. Keep answered questions in intermediate notes; show only unresolved questions in the final report. Long meetings use multiple bounded merge batches.
+5. **RAG indexing**: split the original transcript into 500-character chunks with 50-character overlap and store embeddings in Chroma.
+6. **Conversational chat**: rewrite follow-up questions, retrieve four relevant chunks, and generate a transcript-grounded answer.
+
+`core/analysis.py` exposes `analyze_meeting(transcript)`, returning the existing
+`title`, `summary`, `action_items`, `key_decisions`, and `open_questions` text
+fields. The app, CLI, and manual `test.py` runner call it once and share its
+result. The old summarizer/extractor functions remain compatibility helpers;
+pass the same `analysis=` dictionary to them to avoid repeated analysis.
+
+Normally analysis uses N chunk calls plus one merge call. Larger meetings need
+additional merge calls. Each response is strictly decoded as JSON and validated
+with Pydantic. Incomplete responses trigger smaller-piece recovery;
+truncated output is never accepted as a complete report. This validates
+structure, not the factual accuracy of model reasoning.
+
+### Analysis limits
+
+Optional `.env` settings (restart after changes):
+
+```env
+ANALYSIS_MAX_CONCURRENCY=3
+ANALYSIS_CHUNK_BUDGET=6000
+ANALYSIS_OVERLAP_BUDGET=300
+ANALYSIS_INPUT_BUDGET=16000
+```
+
+Input budgets use a conservative offline estimate of one token per UTF-8 byte,
+including the prompts and JSON schema in the full request check. They usually
+overestimate native token counts and require no tokenizer download. They are
+not exact provider-native counts or a guarantee for every custom model.
+
+Output length uses the selected provider/client's default. The app does not
+force an output-token allowance or expose an output-size setting. Provider
+defaults and model limits still apply; this does not mean unlimited output.
+Length-limit metadata is checked even when JSON is valid, and visibly
+incomplete JSON is also rejected.
+
+Recognized provider context-size errors trigger size recovery. If a chunk
+hits the provider's output limit, or its request exceeds the input
+budget, its source text splits into smaller pieces (at most four recovery split
+levels). Merge overflow uses smaller groups (at most
+three recovery subdivision levels). If merging still cannot finish or notes
+cannot fit the merge budget, the report assembles the validated notes locally,
+preserving distinct items and marking the summary **Review needed**. This
+fallback removes only exact duplicates, uses an existing title candidate, and
+does not claim complete semantic reconciliation. Conflicting explicit answers
+are retained and their question remains open. No incomplete JSON is used.
+
+If source chunks never yield valid complete notes after bounded recovery,
+analysis still fails explicitly rather than inventing or omitting content.
+Authentication, network, and quota errors propagate; clients retain their own
+retry behavior. Set concurrency to `1` for stricter free-tier limits. Recovery
+can add calls and cost, but recovery recursion is bounded.
 
 ## Conversational RAG Details
 

@@ -8,4 +8,6 @@ venv/
 vector_db/
 downloades/
 docs/*
+!docs/changes/
+!docs/technical-documentation.md
 tests/

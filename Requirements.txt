@@ -46,6 +46,7 @@ fpdf2>=2.7.9                      # Lightweight alternative PDF library
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0              # Load API keys from .env
+pydantic>=2.7.4,<3                # Validate shared meeting-analysis JSON
 numpy>=1.26.0
 tqdm>=4.66.0                      # Progress bars
 requests>=2.32.0
